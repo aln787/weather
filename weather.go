@@ -97,28 +97,30 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 
 	// For each provider, spawn a goroutine with an anonymous function.
 	// That function will invoke the temperature method, and forward the response.
+	log.Printf("Iterate over tasks")
 	for _, provider := range w {
+		log.Printf("Create a go routine for each")
 		go func(p weatherProvider) {
 			k, lat, long, err := p.temperature(city)
 			if err != nil {
 				errs <- err
 				return
 			}
-			//log.Printf("add to channel")
+			log.Printf("add to channel")
 			temps <- k
 			lats <- lat
 			longs <- long
-			//log.Printf("after channel addition")
+			log.Printf("after channel addition")
 		}(provider) //What is this provider return value?
-		//log.Printf("out of go routine")
+		log.Printf("out of go routine")
 	}
-	//log.Printf("out of for loop")
+	log.Printf("out of iteration over tasks")
 
 	sum := 0.0
 
+	log.Print("Check each lat value")
 	for i := 0; i < len(w); i++ {
-		//log.Printf("Other for statement")
-		lonVal := <-longs
+		lonVal := <-longs //Extract value from channel
 		latVal := <-lats
 		if latVal != "0.000000" {
 			fio := forcastIO{apiKey: "0e5fb5519fd640307928245167e0e424"}
@@ -130,15 +132,19 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 		}
 	}
 
+	log.Print("Extract each temp")
 	// Collect a temperature or an error from each provider.
 	for i := 0; i < len(w); i++ {
+		log.Print("Before extracting temp")
 		select {
 		case temp := <-temps:
 			sum += temp
 		case err := <-errs:
 			return 0, "", "", err
 		}
+		log.Print("After extracting Temp")
 	}
+	log.Print("Return average of the thee weather services")
 	return sum / float64(len(w)+1), "", "", nil
 }
 
