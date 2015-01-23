@@ -135,8 +135,11 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 
 	log.Print("Extract each temp")
 	// Collect a temperature or an error from each provider.
-	for i := 0; i < len(w); i++ {
+	for i := 0; i < len(w)+1; i++ {
 		log.Print("Before extracting temp")
+		if i == 2 {
+			log.Print("Blocked since the channel will not fill with a third temperature.")
+		}
 		select {
 		case temp := <-temps:
 			sum += temp
