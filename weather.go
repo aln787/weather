@@ -9,13 +9,23 @@ import (
 	"time"
 )
 
+//Review interfaces, if this interface doesn't have the save parameters and return values
+//it causes an error
 type weatherProvider interface {
 	temperature(city string) (float64, string, string, error)
 }
 
+type multiWeatherProvider []weatherProvider
+
 type openWeatherMap struct{}
 
-type multiWeatherProvider []weatherProvider
+type weatherUnderground struct {
+	apiKey string
+}
+
+type forcastIO struct {
+	apiKey string
+}
 
 func (w openWeatherMap) temperature(city string) (float64, string, string, error) {
 	resp, err := http.Get("http://api.openweathermap.org/data/2.5/weather?q=" + city)
@@ -46,35 +56,6 @@ func (w openWeatherMap) temperature(city string) (float64, string, string, error
 	long := strconv.FormatFloat(d.Coordinates.Lon, 'f', 4, 64)
 	log.Printf("openWeatherMap: %s: %.2f", city, d.Main.Kelvin)
 	return d.Main.Kelvin, lat, long, nil
-}
-
-func (w forcastIO) temperature(city string, lat string, long string) (float64, error) {
-	resp, err := http.Get("https://api.forecast.io/forecast/" + w.apiKey + "/" + lat + "," + long)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	var d struct {
-		Currently struct {
-			Ferinheight float64 `json:"temperature"`
-		} `json:"currently"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
-		return 0, err
-	}
-	kelvin := (d.Currently.Ferinheight + 459.67) * 5 / 9
-	log.Printf("Forcast.io: %s: %.2f", city, kelvin)
-	return kelvin, nil
-}
-
-type weatherUnderground struct {
-	apiKey string
-}
-
-type forcastIO struct {
-	apiKey string
 }
 
 func (w weatherUnderground) temperature(city string) (float64, string, string, error) {
@@ -161,14 +142,37 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 	return sum / float64(len(w)+1), "", "", nil
 }
 
+func (w forcastIO) temperature(city string, lat string, long string) (float64, error) {
+	resp, err := http.Get("https://api.forecast.io/forecast/" + w.apiKey + "/" + lat + "," + long)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var d struct {
+		Currently struct {
+			Ferinheight float64 `json:"temperature"`
+		} `json:"currently"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
+		return 0, err
+	}
+	kelvin := (d.Currently.Ferinheight + 459.67) * 5 / 9
+	log.Printf("Forcast.io: %s: %.2f", city, kelvin)
+	return kelvin, nil
+}
+
 func main() {
 	mw := multiWeatherProvider{
 		openWeatherMap{},
 		weatherUnderground{apiKey: "af20b75c5ffafa39"},
 	}
 
+	//Why is this a pointer to the request?
 	http.HandleFunc("/weather/", func(w http.ResponseWriter, r *http.Request) {
 		begin := time.Now()
+		//How does the 3 work http://golang.org/pkg/strings/#SplitN
 		city := strings.SplitN(r.URL.Path, "/", 3)[2]
 
 		temp, _, _, err := mw.temperature(city)
