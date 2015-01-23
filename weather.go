@@ -25,8 +25,9 @@ func (w openWeatherMap) temperature(city string) (float64, string, string, error
 
 	defer resp.Body.Close()
 
-	//Issue with capitalization
-	var d struct {
+	//Issue with capitalization, if the l in lat or long is lower case it causes the
+	//return value to be zero
+	var d struct { //What is the difference between having this as a struct and a var?
 		Coordinates struct {
 			Lat float64 `json:"lat"`
 			Lon float64 `json:"lon"`
@@ -37,20 +38,18 @@ func (w openWeatherMap) temperature(city string) (float64, string, string, error
 		} `json:"main"`
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil { //What does the & signal?
 		return 0, "", "", err
 	}
 
-	lat := strconv.FormatFloat(d.Coordinates.Lat, 'f', 4, 32)
-	long := strconv.FormatFloat(d.Coordinates.Lon, 'f', 4, 32)
+	lat := strconv.FormatFloat(d.Coordinates.Lat, 'f', 4, 64)
+	long := strconv.FormatFloat(d.Coordinates.Lon, 'f', 4, 64)
 	log.Printf("openWeatherMap: %s: %.2f", city, d.Main.Kelvin)
 	return d.Main.Kelvin, lat, long, nil
 }
 
 func (w forcastIO) temperature(city string, lat string, long string) (float64, error) {
-	requestString := "https://api.forecast.io/forecast/" + w.apiKey + "/" + lat + "," + long
-	//log.Printf(requestString)
-	resp, err := http.Get(requestString)
+	resp, err := http.Get("https://api.forecast.io/forecast/" + w.apiKey + "/" + lat + "," + long)
 	if err != nil {
 		return 0, err
 	}
@@ -65,7 +64,6 @@ func (w forcastIO) temperature(city string, lat string, long string) (float64, e
 	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
 		return 0, err
 	}
-
 	kelvin := (d.Currently.Ferinheight + 459.67) * 5 / 9
 	log.Printf("Forcast.io: %s: %.2f", city, kelvin)
 	return kelvin, nil
@@ -84,7 +82,6 @@ func (w weatherUnderground) temperature(city string) (float64, string, string, e
 	if err != nil {
 		return 0, "", "", err
 	}
-
 	defer resp.Body.Close()
 
 	//if switched to type instead of var error "type d is not an expression" appears below
@@ -101,7 +98,6 @@ func (w weatherUnderground) temperature(city string) (float64, string, string, e
 	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
 		return 0, "", "", err
 	}
-
 	kelvin := d.Observation.Celsius + 273.15
 	lat := strconv.FormatFloat(d.Observation.location.Lat, 'f', 6, 64)
 	lon := strconv.FormatFloat(d.Observation.location.Lon, 'f', 6, 64)
@@ -111,10 +107,11 @@ func (w weatherUnderground) temperature(city string) (float64, string, string, e
 
 func (w multiWeatherProvider) temperature(city string) (float64, string, string, error) {
 	// Make a channel for temperatures, and a channel for errors.
-	// Each provider will push a value into only one.
+
+	//Reduce to a single channel with a more complex structure
 	temps := make(chan float64, len(w))
-	lats := make(chan string, 2)
-	longs := make(chan string, 2)
+	lats := make(chan string, len(w))
+	longs := make(chan string, len(w))
 	errs := make(chan error, len(w))
 
 	// For each provider, spawn a goroutine with an anonymous function.
@@ -131,7 +128,7 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 			lats <- lat
 			longs <- long
 			//log.Printf("after channel addition")
-		}(provider)
+		}(provider) //What is this provider return value?
 		//log.Printf("out of go routine")
 	}
 	//log.Printf("out of for loop")
@@ -142,8 +139,6 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 		//log.Printf("Other for statement")
 		lonVal := <-longs
 		latVal := <-lats
-		//log.Println("Lat: " + latVal)
-		//log.Println("Lon: " + lonVal)
 		if latVal != "0.000000" {
 			fio := forcastIO{apiKey: "0e5fb5519fd640307928245167e0e424"}
 			forcastTemp, err := fio.temperature(city, latVal, lonVal)
@@ -163,8 +158,6 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 			return 0, "", "", err
 		}
 	}
-
-	// Return the average, same as before.
 	return sum / float64(len(w)+1), "", "", nil
 }
 
@@ -183,7 +176,6 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"city": city,
