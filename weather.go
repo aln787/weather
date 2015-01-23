@@ -90,6 +90,7 @@ func (w multiWeatherProvider) temperature(city string) (float64, string, string,
 	// Make a channel for temperatures, and a channel for errors.
 
 	//Reduce to a single channel with a more complex structure
+	/////https://gobyexample.com/closing-channels
 	temps := make(chan float64, len(w))
 	lats := make(chan string, len(w))
 	longs := make(chan string, len(w))
